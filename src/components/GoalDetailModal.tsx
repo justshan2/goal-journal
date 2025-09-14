@@ -157,8 +157,14 @@ export const GoalDetailModal: React.FC<GoalDetailModalProps> = ({
                           {new Date(update.timestamp).toLocaleDateString()} at {new Date(update.timestamp).toLocaleTimeString()}
                         </span>
                         {update.llmResponse && (
-                          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                            +{update.llmResponse.progress_increase}%
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            update.llmResponse.progress_increase > 0 
+                              ? 'bg-green-100 text-green-800' 
+                              : update.llmResponse.progress_increase < 0
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {update.llmResponse.progress_increase > 0 ? '+' : ''}{update.llmResponse.progress_increase}%
                           </span>
                         )}
                       </div>

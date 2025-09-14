@@ -154,6 +154,8 @@ export const ProgressInput: React.FC<ProgressInputProps> = ({
                         <span className={`text-sm font-bold px-2 py-1 rounded-full ${
                           latestProgressIncrease > 0 
                             ? 'bg-green-100 text-green-700' 
+                            : latestProgressIncrease < 0
+                            ? 'bg-red-100 text-red-700'
                             : 'bg-gray-100 text-gray-600'
                         }`}>
                           {latestProgressIncrease > 0 ? '+' : ''}{latestProgressIncrease}%
