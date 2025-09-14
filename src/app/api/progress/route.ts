@@ -6,79 +6,36 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Function to perform web search for domain-specific research
-async function performWebSearch(query: string): Promise<string> {
-  try {
-    // Use a simple web search approach - in production, you'd want to use a proper search API
-    // For now, we'll simulate research with domain-specific knowledge
-    const researchResults = {
-      'pokemon tcg': 'Pokemon TCG competitive play involves deck building, meta analysis, and strategic gameplay. Key factors include card synergy, energy management, and opponent prediction.',
-      'programming': 'Programming progress involves understanding concepts, building projects, debugging skills, and following best practices. Key milestones include syntax mastery, problem-solving, and system design.',
-      'fitness': 'Fitness progress includes strength gains, endurance improvement, and body composition changes. Key factors are consistency, progressive overload, and proper nutrition.',
-      'learning': 'Learning progress involves comprehension, retention, application, and mastery. Key factors include active practice, spaced repetition, and real-world application.'
-    };
-
-    const lowerQuery = query.toLowerCase();
-    for (const [key, value] of Object.entries(researchResults)) {
-      if (lowerQuery.includes(key)) {
-        return value;
-      }
-    }
-
-    return 'General progress tracking involves setting clear goals, measuring outcomes, and adjusting strategies based on results.';
-  } catch (error) {
-    console.error('Web search error:', error);
-    return 'Research data unavailable.';
-  }
-}
-
-// Function to generate research queries based on goal context
-function generateProgressResearchQueries(goal: Goal): string[] {
-  const queries = [];
-  
-  // Extract key terms from goal title and description
-  const text = `${goal.title} ${goal.description || ''} ${goal.context || ''}`.toLowerCase();
-  
-  if (text.includes('pokemon') || text.includes('tcg') || text.includes('card')) {
-    queries.push('pokemon tcg competitive strategy');
-  }
-  if (text.includes('programming') || text.includes('code') || text.includes('development')) {
-    queries.push('programming learning progress');
-  }
-  if (text.includes('fitness') || text.includes('exercise') || text.includes('workout')) {
-    queries.push('fitness progress tracking');
-  }
-  if (text.includes('learn') || text.includes('study') || text.includes('skill')) {
-    queries.push('learning progress milestones');
-  }
-  
-  return queries.length > 0 ? queries : ['general goal progress tracking'];
-}
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OpenAI API key is not configured');
+      return NextResponse.json({ 
+        error: 'OpenAI API key is not configured. Please check your environment variables.',
+        success: false 
+      }, { status: 500 });
+    }
+
     const { goal, journalEntry, previousUpdates } = await request.json();
 
     if (!goal || !journalEntry) {
       return NextResponse.json({ error: 'Goal and journal entry are required' }, { status: 400 });
     }
 
-    // Generate research queries and perform web search
-    const researchQueries = generateProgressResearchQueries(goal);
-    const researchPromises = researchQueries.slice(0, 2).map(query => performWebSearch(query));
-    const researchResults = await Promise.all(researchPromises);
-    const researchContext = researchResults.join(' ');
-
     // Create progress analysis prompt
-    const prompt = createProgressAnalysisPrompt(goal, journalEntry, previousUpdates || [], researchContext);
+    const prompt = createProgressAnalysisPrompt(goal, journalEntry, previousUpdates || []);
 
     // Call OpenAI API
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: `Analyze progress and return JSON:
+    let completion;
+    try {
+      completion = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: `Analyze progress and return JSON:
 {
   "overall_progress": 75,
   "progress_increase": 5,
@@ -86,15 +43,23 @@ export async function POST(request: NextRequest) {
   "feedback": "encouraging advice"
 }
 Progress increase: 0-15% per entry. Be conservative.`
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      max_tokens: 300,
-      temperature: 0.4,
-    });
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 300,
+        temperature: 0.4,
+      });
+    } catch (openaiError) {
+      console.error('OpenAI API error:', openaiError);
+      return NextResponse.json({ 
+        error: 'Failed to analyze progress. Please check your API key and try again.',
+        success: false,
+        details: openaiError instanceof Error ? openaiError.message : 'Unknown OpenAI error'
+      }, { status: 500 });
+    }
 
     const response = completion.choices[0]?.message?.content;
     
@@ -146,7 +111,7 @@ Progress increase: 0-15% per entry. Be conservative.`
   }
 }
 
-function createProgressAnalysisPrompt(goal: Goal, journalEntry: string, previousUpdates: any[], researchContext: string): string {
+function createProgressAnalysisPrompt(goal: Goal, journalEntry: string, previousUpdates: any[]): string {
   const context = previousUpdates.length > 0 
     ? `Previous: ${previousUpdates.slice(-1).map(u => `${u.journalEntry.substring(0, 50)} (${u.llmResponse?.overall_progress || 0}%)`).join('; ')}`
     : '';
