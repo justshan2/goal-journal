@@ -26,16 +26,17 @@ export async function POST(request: NextRequest) {
           content: `You are a strategic goal coaching AI. Provide concise, actionable advice in JSON format:
 
 {
-  "milestones": ["milestone1", "milestone2", "milestone3"],
-  "habits": ["habit1", "habit2", "habit3"],
-  "advice": "specific actionable advice"
+  "milestones": [{"title": "X", "description": "Y", "timeline": "Z", "priority": "high|medium|low"}],
+  "habits": [{"name": "X", "description": "Y", "frequency": "Z", "impact": "W"}],
+  "advice": "Brief advice"
 }
 
 Rules:
 - Keep responses under 400 tokens
 - Focus on current progress, not past work
 - Provide specific, actionable steps
-- Use simple language`
+- Use simple language
+- Keep it concise and actionable`
         },
         {
           role: 'user',
@@ -59,8 +60,16 @@ Rules:
     } catch (parseError) {
       // Fallback if JSON parsing fails
       coachingData = {
-        milestones: ['Break down your goal into smaller steps', 'Set weekly targets', 'Track progress regularly'],
-        habits: ['Daily practice', 'Weekly review', 'Monthly assessment'],
+        milestones: [
+          {"title": "Break down your goal", "description": "Divide your goal into smaller, manageable steps", "timeline": "1 week", "priority": "high"},
+          {"title": "Set weekly targets", "description": "Create specific weekly objectives to track progress", "timeline": "ongoing", "priority": "high"},
+          {"title": "Track progress regularly", "description": "Monitor and adjust your approach based on results", "timeline": "ongoing", "priority": "medium"}
+        ],
+        habits: [
+          {"name": "Daily practice", "description": "Dedicate time each day to work toward your goal", "frequency": "daily", "impact": "high"},
+          {"name": "Weekly review", "description": "Reflect on progress and adjust strategies", "frequency": "weekly", "impact": "medium"},
+          {"name": "Monthly assessment", "description": "Evaluate overall progress and set new targets", "frequency": "monthly", "impact": "high"}
+        ],
         advice: response
       };
     }
