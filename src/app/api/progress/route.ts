@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   "reasoning": "brief explanation",
   "feedback": "encouraging advice"
 }
-Progress increase: 0-15% per entry. Be conservative.`
+Progress increase: -15% to +15% per entry. Negative if setback occurred. Be realistic.`
           },
           {
             role: 'user',
@@ -169,7 +169,7 @@ function calculateFinancialProgress(goal: Goal, journalEntry: string, previousUp
       ? previousUpdates[previousUpdates.length - 1].llmResponse?.overall_progress || 0
       : 0;
     
-    const progressIncrease = Math.max(progressPercentage - previousProgress, 0);
+    const progressIncrease = progressPercentage - previousProgress;
 
     // Generate appropriate feedback
     const feedback = generateFinancialFeedback(currentAmount, targetAmount, progressPercentage, journalEntry);
@@ -241,7 +241,7 @@ function generateFinancialFeedback(currentAmount: number, targetAmount: number, 
   const isLoss = journalEntry.toLowerCase().includes('lost') || journalEntry.toLowerCase().includes('down') || journalEntry.toLowerCase().includes('decreased');
   
   if (isLoss) {
-    return `Current bankroll: $${currentAmount.toLocaleString()}. You're ${Math.round(progressPercentage)}% to your $${targetAmount.toLocaleString()} goal. Stay disciplined and stick to your strategy.`;
+    return `Current bankroll: $${currentAmount.toLocaleString()}. You're ${Math.round(progressPercentage)}% to your $${targetAmount.toLocaleString()} goal. Setback today, but stay disciplined and stick to your strategy.`;
   } else if (progressPercentage >= 100) {
     return `🎉 Congratulations! You've reached your $${targetAmount.toLocaleString()} goal! Current bankroll: $${currentAmount.toLocaleString()}.`;
   } else if (progressPercentage >= 80) {
