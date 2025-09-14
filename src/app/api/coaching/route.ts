@@ -85,6 +85,13 @@ Rules:
         cleanResponse = cleanResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
       }
       
+      // Try to find JSON object in the response if it's not the whole response
+      const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleanResponse = jsonMatch[0];
+      }
+      
+      console.log('Attempting to parse cleaned response:', cleanResponse);
       coachingData = JSON.parse(cleanResponse);
       
       // Validate the structure
@@ -95,6 +102,24 @@ Rules:
     } catch (parseError) {
       console.error('Failed to parse coaching response:', parseError);
       console.error('Raw response:', response);
+      
+      // Try to extract advice from the raw response if possible
+      let extractedAdvice = 'Unable to parse AI response. Please try again for personalized coaching advice.';
+      try {
+        // Look for any text that might be advice
+        const adviceMatch = response.match(/advice["\s]*:["\s]*"([^"]+)"/i);
+        if (adviceMatch) {
+          extractedAdvice = adviceMatch[1];
+        } else {
+          // Try to find any meaningful text after common patterns
+          const textMatch = response.match(/(?:advice|guidance|recommendation)[\s\S]*?([A-Z][^.!?]*[.!?])/i);
+          if (textMatch) {
+            extractedAdvice = textMatch[1];
+          }
+        }
+      } catch (extractError) {
+        console.error('Failed to extract advice from response:', extractError);
+      }
       
       // Fallback if JSON parsing fails
       coachingData = {
@@ -108,7 +133,7 @@ Rules:
           {"name": "Weekly review", "description": "Reflect on progress and adjust strategies", "frequency": "weekly", "impact": "medium"},
           {"name": "Monthly assessment", "description": "Evaluate overall progress and set new targets", "frequency": "monthly", "impact": "high"}
         ],
-        advice: 'Unable to parse AI response. Please try again for personalized coaching advice.'
+        advice: extractedAdvice
       };
     }
 
