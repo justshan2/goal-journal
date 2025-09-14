@@ -46,14 +46,14 @@ export async function POST(request: NextRequest) {
         messages: [
           {
             role: 'system',
-            content: `Analyze progress and return JSON:
+            content: `Analyze progress and return ONLY valid JSON (no markdown, no extra text):
 {
   "overall_progress": 75,
   "progress_increase": 5,
   "reasoning": "brief explanation",
   "feedback": "encouraging advice"
 }
-Progress increase: -15% to +15% per entry. Negative if setback occurred. Be realistic.`
+Progress increase: -15% to +15% per entry. Negative if setback occurred. Be realistic. Return only the JSON object.`
           },
           {
             role: 'user',
@@ -81,8 +81,27 @@ Progress increase: -15% to +15% per entry. Negative if setback occurred. Be real
     // Parse JSON response
     let progressData: LLMProgressResponse;
     try {
-      progressData = JSON.parse(response);
+      // Clean the response to extract JSON if it's wrapped in markdown or other text
+      let cleanResponse = response.trim();
+      
+      // Remove markdown code blocks if present
+      if (cleanResponse.startsWith('```json')) {
+        cleanResponse = cleanResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanResponse.startsWith('```')) {
+        cleanResponse = cleanResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      // Try to extract JSON from the response if it contains other text
+      const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleanResponse = jsonMatch[0];
+      }
+      
+      progressData = JSON.parse(cleanResponse);
     } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      console.error('Raw response:', response);
+      
       // Fallback if JSON parsing fails
       progressData = {
         overall_progress: goal.overallProgress,
@@ -94,7 +113,9 @@ Progress increase: -15% to +15% per entry. Negative if setback occurred. Be real
 
     // Validate progress data
     if (typeof progressData.overall_progress !== 'number' || 
-        typeof progressData.progress_increase !== 'number') {
+        typeof progressData.progress_increase !== 'number' ||
+        progressData.overall_progress < 0 || progressData.overall_progress > 100) {
+      console.error('Invalid progress data:', progressData);
       throw new Error('Invalid progress data format');
     }
 
