@@ -74,33 +74,25 @@ export async function POST(request: NextRequest) {
 
     // Call OpenAI API
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-3.5-turbo',
       messages: [
         {
           role: 'system',
-          content: `You are a progress analysis AI. Analyze journal entries and update goal progress in JSON format:
-
+          content: `Analyze progress and return JSON:
 {
   "overall_progress": 75,
   "progress_increase": 5,
-  "reasoning": "explanation for the progress change",
-  "feedback": "encouraging advice and next steps"
+  "reasoning": "brief explanation",
+  "feedback": "encouraging advice"
 }
-
-Rules:
-- Progress increase should be 0-15% per entry
-- Be conservative with progress increases
-- Consider context from previous updates to avoid double-counting
-- Provide specific, actionable feedback
-- Use research context when relevant
-- Always output the exact percentage increase given and reasoning`
+Progress increase: 0-15% per entry. Be conservative.`
         },
         {
           role: 'user',
           content: prompt
         }
       ],
-      max_tokens: 600,
+      max_tokens: 300,
       temperature: 0.4,
     });
 
@@ -156,26 +148,12 @@ Rules:
 
 function createProgressAnalysisPrompt(goal: Goal, journalEntry: string, previousUpdates: any[], researchContext: string): string {
   const context = previousUpdates.length > 0 
-    ? `Previous updates: ${previousUpdates.slice(-3).map(u => `${u.journalEntry} (${u.llmResponse?.overall_progress || 0}%)`).join('; ')}`
-    : 'No previous updates';
+    ? `Previous: ${previousUpdates.slice(-1).map(u => `${u.journalEntry.substring(0, 50)} (${u.llmResponse?.overall_progress || 0}%)`).join('; ')}`
+    : '';
 
   return `Goal: ${goal.title}
-Description: ${goal.description || 'No description'}
-Current Progress: ${goal.overallProgress}%
-Initial Progress: ${goal.initialProgress || 'Not specified'}
-Context: ${goal.context || 'No additional context'}
-
-Research Context: ${researchContext}
-
+Current: ${goal.overallProgress}%
 ${context}
-
-New Journal Entry: "${journalEntry}"
-
-Analyze this entry and determine:
-1. New overall progress percentage (0-100)
-2. Progress increase from current ${goal.overallProgress}%
-3. Reasoning for the change
-4. Encouraging feedback and next steps
-
-Consider the research context and previous updates to avoid double-counting accomplishments.`;
+Entry: "${journalEntry}"
+Analyze progress change.`;
 }

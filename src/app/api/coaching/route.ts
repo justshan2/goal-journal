@@ -30,31 +30,24 @@ export async function POST(request: NextRequest) {
     let completion;
     try {
       completion = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-3.5-turbo',
         messages: [
           {
             role: 'system',
-            content: `You are a strategic goal coaching AI. Provide concise, actionable advice in JSON format:
-
+            content: `Provide coaching advice in JSON format:
 {
   "milestones": [{"title": "X", "description": "Y", "timeline": "Z", "priority": "high|medium|low"}],
   "habits": [{"name": "X", "description": "Y", "frequency": "Z", "impact": "W"}],
   "advice": "Brief advice"
 }
-
-Rules:
-- Keep descriptions concise (1-2 sentences max)
-- Focus on current progress, not past work
-- Provide specific, actionable steps
-- Use simple language
-- Ensure complete JSON structure`
+Keep descriptions short.`
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        max_tokens: 800,
+        max_tokens: 400,
         temperature: 0.3,
       });
     } catch (openaiError) {
@@ -153,25 +146,18 @@ Rules:
 
 function createCoachingPrompt(goal: Goal, previousUpdates: any[], userInput?: string): string {
   const context = previousUpdates.length > 0 
-    ? `Recent progress: ${previousUpdates.slice(-2).map(u => u.journalEntry).join('; ')}`
-    : 'No previous progress updates';
+    ? `Recent: ${previousUpdates.slice(-1).map(u => u.journalEntry.substring(0, 100)).join('; ')}`
+    : '';
 
   const basePrompt = `Goal: ${goal.title}
-Description: ${goal.description || 'No description'}
-Current Progress: ${goal.overallProgress}%
-Initial Progress: ${goal.initialProgress || 'Not specified'}
-Context: ${goal.context || 'No additional context'}
+Progress: ${goal.overallProgress}%
 ${context}`;
 
   if (userInput) {
     return `${basePrompt}
-
-User Question: ${userInput}
-
-Provide specific advice addressing their question.`;
+Question: ${userInput}`;
   }
 
   return `${basePrompt}
-
-Provide strategic milestones and habits to help achieve this goal.`;
+Provide milestones, habits, and advice.`;
 }
