@@ -43,18 +43,18 @@ export async function POST(request: NextRequest) {
 }
 
 Rules:
-- Keep responses under 400 tokens
+- Keep descriptions concise (1-2 sentences max)
 - Focus on current progress, not past work
 - Provide specific, actionable steps
 - Use simple language
-- Keep it concise and actionable`
+- Ensure complete JSON structure`
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        max_tokens: 400,
+        max_tokens: 800,
         temperature: 0.3,
       });
     } catch (openaiError) {
