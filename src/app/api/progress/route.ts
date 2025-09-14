@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { Goal, LLMProgressResponse } from '@/types';
+import { Goal, LLMProgressResponse } from '../../../types';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -24,7 +24,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Goal and journal entry are required' }, { status: 400 });
     }
 
-    // Create progress analysis prompt
+    // Check if this is a financial goal and handle it differently
+    if (isFinancialGoal(goal)) {
+      const financialProgress = calculateFinancialProgress(goal, journalEntry, previousUpdates || []);
+      if (financialProgress) {
+        return NextResponse.json({ 
+          success: true, 
+          data: financialProgress 
+        });
+      }
+    }
+
+    // Create progress analysis prompt for non-financial goals
     const prompt = createProgressAnalysisPrompt(goal, journalEntry, previousUpdates || []);
 
     // Call OpenAI API
@@ -121,4 +132,123 @@ Current: ${goal.overallProgress}%
 ${context}
 Entry: "${journalEntry}"
 Analyze progress change.`;
+}
+
+// Check if a goal is financial in nature
+function isFinancialGoal(goal: Goal): boolean {
+  const financialKeywords = [
+    'bankroll', 'savings', 'money', 'dollar', '$', 'budget', 'income', 'revenue',
+    'profit', 'loss', 'investment', 'portfolio', 'cash', 'fund', 'capital',
+    'earn', 'make money', 'financial', 'wealth', 'net worth'
+  ];
+  
+  const goalText = `${goal.title} ${goal.description || ''} ${goal.context || ''}`.toLowerCase();
+  return financialKeywords.some(keyword => goalText.includes(keyword));
+}
+
+// Calculate progress for financial goals based on actual numbers
+function calculateFinancialProgress(goal: Goal, journalEntry: string, previousUpdates: any[]): LLMProgressResponse | null {
+  try {
+    // Extract target amount from goal
+    const targetAmount = extractTargetAmount(goal);
+    if (!targetAmount) {
+      return null; // Fall back to AI analysis if we can't extract target
+    }
+
+    // Extract current amount from journal entry
+    const currentAmount = extractCurrentAmount(journalEntry);
+    if (currentAmount === null) {
+      return null; // Fall back to AI analysis if we can't extract current amount
+    }
+
+    // Calculate progress percentage
+    const progressPercentage = Math.min(Math.max((currentAmount / targetAmount) * 100, 0), 100);
+    
+    // Calculate progress increase from previous update
+    const previousProgress = previousUpdates.length > 0 
+      ? previousUpdates[previousUpdates.length - 1].llmResponse?.overall_progress || 0
+      : 0;
+    
+    const progressIncrease = Math.max(progressPercentage - previousProgress, 0);
+
+    // Generate appropriate feedback
+    const feedback = generateFinancialFeedback(currentAmount, targetAmount, progressPercentage, journalEntry);
+
+    return {
+      overall_progress: Math.round(progressPercentage),
+      progress_increase: Math.round(progressIncrease),
+      reasoning: `Current: $${currentAmount.toLocaleString()}, Target: $${targetAmount.toLocaleString()}`,
+      feedback: feedback
+    };
+  } catch (error) {
+    console.error('Error calculating financial progress:', error);
+    return null; // Fall back to AI analysis
+  }
+}
+
+// Extract target amount from goal
+function extractTargetAmount(goal: Goal): number | null {
+  const text = `${goal.title} ${goal.description || ''} ${goal.context || ''}`;
+  
+  // Look for patterns like "3K", "3000", "$3000", "3,000", etc.
+  const patterns = [
+    /(\d+(?:\.\d+)?)\s*k/i,  // 3K, 3k
+    /\$(\d+(?:,\d{3})*(?:\.\d+)?)/,  // $3,000, $3000
+    /(\d+(?:,\d{3})*(?:\.\d+)?)\s*dollars?/i,  // 3000 dollars
+    /(\d+(?:,\d{3})*(?:\.\d+)?)\s*\$/,  // 3000$
+    /(\d+(?:,\d{3})*(?:\.\d+)?)(?=\s|$)/  // 3000 at end of string
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      let amount = parseFloat(match[1].replace(/,/g, ''));
+      
+      // Handle K suffix
+      if (text.toLowerCase().includes('k') && amount < 1000) {
+        amount *= 1000;
+      }
+      
+      return amount;
+    }
+  }
+  
+  return null;
+}
+
+// Extract current amount from journal entry
+function extractCurrentAmount(journalEntry: string): number | null {
+  // Look for patterns like "current bankroll: $2500", "now at $2500", "bankroll is $2500", etc.
+  const patterns = [
+    /(?:current|now|at|is|bankroll|balance|total|amount)\s*:?\s*\$?(\d+(?:,\d{3})*(?:\.\d+)?)/i,
+    /\$(\d+(?:,\d{3})*(?:\.\d+)?)/,
+    /(\d+(?:,\d{3})*(?:\.\d+)?)\s*dollars?/i,
+    /(\d+(?:,\d{3})*(?:\.\d+)?)\s*\$/
+  ];
+
+  for (const pattern of patterns) {
+    const match = journalEntry.match(pattern);
+    if (match) {
+      return parseFloat(match[1].replace(/,/g, ''));
+    }
+  }
+  
+  return null;
+}
+
+// Generate appropriate feedback for financial goals
+function generateFinancialFeedback(currentAmount: number, targetAmount: number, progressPercentage: number, journalEntry: string): string {
+  const isLoss = journalEntry.toLowerCase().includes('lost') || journalEntry.toLowerCase().includes('down') || journalEntry.toLowerCase().includes('decreased');
+  
+  if (isLoss) {
+    return `Current bankroll: $${currentAmount.toLocaleString()}. You're ${Math.round(progressPercentage)}% to your $${targetAmount.toLocaleString()} goal. Stay disciplined and stick to your strategy.`;
+  } else if (progressPercentage >= 100) {
+    return `🎉 Congratulations! You've reached your $${targetAmount.toLocaleString()} goal! Current bankroll: $${currentAmount.toLocaleString()}.`;
+  } else if (progressPercentage >= 80) {
+    return `Great progress! You're ${Math.round(progressPercentage)}% to your $${targetAmount.toLocaleString()} goal. Current bankroll: $${currentAmount.toLocaleString()}. You're almost there!`;
+  } else if (progressPercentage >= 50) {
+    return `Good progress! You're ${Math.round(progressPercentage)}% to your $${targetAmount.toLocaleString()} goal. Current bankroll: $${currentAmount.toLocaleString()}. Keep it up!`;
+  } else {
+    return `Current bankroll: $${currentAmount.toLocaleString()}. You're ${Math.round(progressPercentage)}% to your $${targetAmount.toLocaleString()} goal. Stay consistent and focused.`;
+  }
 }
