@@ -56,8 +56,27 @@ Rules:
     // Parse JSON response
     let coachingData;
     try {
-      coachingData = JSON.parse(response);
+      // Clean the response to remove any markdown formatting or extra text
+      let cleanResponse = response.trim();
+      
+      // Remove markdown code blocks if present
+      if (cleanResponse.startsWith('```json')) {
+        cleanResponse = cleanResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanResponse.startsWith('```')) {
+        cleanResponse = cleanResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      coachingData = JSON.parse(cleanResponse);
+      
+      // Validate the structure
+      if (!coachingData.milestones || !coachingData.habits || !coachingData.advice) {
+        throw new Error('Invalid response structure');
+      }
+      
     } catch (parseError) {
+      console.error('Failed to parse coaching response:', parseError);
+      console.error('Raw response:', response);
+      
       // Fallback if JSON parsing fails
       coachingData = {
         milestones: [
@@ -70,7 +89,7 @@ Rules:
           {"name": "Weekly review", "description": "Reflect on progress and adjust strategies", "frequency": "weekly", "impact": "medium"},
           {"name": "Monthly assessment", "description": "Evaluate overall progress and set new targets", "frequency": "monthly", "impact": "high"}
         ],
-        advice: response
+        advice: 'Unable to parse AI response. Please try again for personalized coaching advice.'
       };
     }
 
