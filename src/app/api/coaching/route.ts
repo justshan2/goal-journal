@@ -8,6 +8,15 @@ const openai = new OpenAI({
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OpenAI API key is not configured');
+      return NextResponse.json({ 
+        error: 'OpenAI API key is not configured. Please check your environment variables.',
+        success: false 
+      }, { status: 500 });
+    }
+
     const { goal, previousUpdates, userInput } = await request.json();
 
     if (!goal) {
@@ -18,12 +27,14 @@ export async function POST(request: NextRequest) {
     const prompt = createCoachingPrompt(goal, previousUpdates || [], userInput);
 
     // Call OpenAI API
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a strategic goal coaching AI. Provide concise, actionable advice in JSON format:
+    let completion;
+    try {
+      completion = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a strategic goal coaching AI. Provide concise, actionable advice in JSON format:
 
 {
   "milestones": [{"title": "X", "description": "Y", "timeline": "Z", "priority": "high|medium|low"}],
@@ -37,15 +48,23 @@ Rules:
 - Provide specific, actionable steps
 - Use simple language
 - Keep it concise and actionable`
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      max_tokens: 400,
-      temperature: 0.3,
-    });
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 400,
+        temperature: 0.3,
+      });
+    } catch (openaiError) {
+      console.error('OpenAI API error:', openaiError);
+      return NextResponse.json({ 
+        error: 'Failed to get coaching advice from AI. Please check your API key and try again.',
+        success: false,
+        details: openaiError instanceof Error ? openaiError.message : 'Unknown OpenAI error'
+      }, { status: 500 });
+    }
 
     const response = completion.choices[0]?.message?.content;
     

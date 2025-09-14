@@ -219,7 +219,13 @@ export default function HomePage() {
         }),
       });
 
-      const result = await response.json();
+      let result;
+      try {
+        result = await response.json();
+      } catch (jsonError) {
+        console.error('Failed to parse API response as JSON:', jsonError);
+        throw new Error('Invalid response from server. Please check your API key configuration.');
+      }
 
       if (result.success && result.data) {
         // Process the coaching response and store it by goal ID
@@ -244,8 +250,9 @@ export default function HomePage() {
     } catch (error) {
       console.error('Error getting coaching advice:', error);
       
-      // Show error message
-      alert('Failed to get coaching advice. Please try again later.');
+      // Show more specific error message
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Failed to get coaching advice: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
