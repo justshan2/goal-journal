@@ -46,14 +46,21 @@ export async function POST(request: NextRequest) {
         messages: [
           {
             role: 'system',
-            content: `Analyze progress and return ONLY valid JSON (no markdown, no extra text):
+            content: `You are a strict progress analyzer. Return ONLY valid JSON (no markdown, no extra text):
 {
   "overall_progress": 75,
   "progress_increase": 5,
   "reasoning": "brief explanation",
   "feedback": "encouraging advice"
 }
-Progress increase: -15% to +15% per entry. Negative if setback occurred. Be realistic. Return only the JSON object.`
+
+CRITICAL RULES:
+1. For financial goals (bankroll, money, savings): ONLY give positive progress if money was actually gained
+2. If user mentions losing money, losing sessions, downswings, or setbacks: progress MUST be negative
+3. Mental game issues, leaks, bad plays = negative progress (you're moving away from goal)
+4. Progress increase: -15% to +15% per entry
+5. Be harsh but fair - setbacks are setbacks, not learning opportunities for progress
+6. Return only the JSON object.`
           },
           {
             role: 'user',
@@ -119,6 +126,26 @@ Progress increase: -15% to +15% per entry. Negative if setback occurred. Be real
       throw new Error('Invalid progress data format');
     }
 
+    // Additional validation for financial goals - catch AI being too optimistic
+    if (isFinancialGoal(goal)) {
+      const hasLossKeywords = journalEntry.toLowerCase().includes('lost') || 
+                             journalEntry.toLowerCase().includes('down') || 
+                             journalEntry.toLowerCase().includes('decreased') ||
+                             journalEntry.toLowerCase().includes('leak') ||
+                             journalEntry.toLowerCase().includes('bad play') ||
+                             journalEntry.toLowerCase().includes('mental game') ||
+                             journalEntry.toLowerCase().includes('tilt') ||
+                             journalEntry.toLowerCase().includes('mistake');
+      
+      if (hasLossKeywords && progressData.progress_increase > 0) {
+        console.warn('AI gave positive progress for financial goal with loss keywords, correcting to negative');
+        progressData.progress_increase = Math.max(progressData.progress_increase * -1, -15);
+        progressData.overall_progress = Math.max(goal.overallProgress + progressData.progress_increase, 0);
+        progressData.reasoning = 'Corrected: Setback detected in entry, progress decreased';
+        progressData.feedback = 'Setback acknowledged. Stay disciplined and stick to your strategy.';
+      }
+    }
+
     return NextResponse.json({ 
       success: true, 
       data: progressData 
@@ -148,11 +175,17 @@ function createProgressAnalysisPrompt(goal: Goal, journalEntry: string, previous
     ? `Previous: ${previousUpdates.slice(-1).map(u => `${u.journalEntry.substring(0, 50)} (${u.llmResponse?.overall_progress || 0}%)`).join('; ')}`
     : '';
 
+  const isFinancial = isFinancialGoal(goal);
+  const financialWarning = isFinancial 
+    ? `\nWARNING: This is a FINANCIAL GOAL. Only give positive progress if money was actually gained. Losses, downswings, mental game issues = NEGATIVE progress.`
+    : '';
+
   return `Goal: ${goal.title}
 Current: ${goal.overallProgress}%
 ${context}
 Entry: "${journalEntry}"
-Analyze progress change.`;
+${financialWarning}
+Analyze progress change. Be strict about setbacks.`;
 }
 
 // Check if a goal is financial in nature
